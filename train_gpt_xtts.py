@@ -192,7 +192,10 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
         print(f"Using {torch.cuda.device_count()} GPUs with DataParallel")
         model = DataParallel(model)
     model = model.cuda()  # Ensure model is moved to GPU
-    
+
+    original_device_count = torch.cuda.device_count
+    torch.cuda.device_count = lambda: 1  # Temporarily set to 1 to bypass Trainer's check
+
     # load training samples
     train_samples, eval_samples = load_tts_samples(
         DATASETS_CONFIG_LIST,
@@ -218,6 +221,9 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
         train_samples=train_samples,
         eval_samples=eval_samples,
     )
+
+    torch.cuda.device_count = original_device_count  # Restore the original device count
+
     trainer.fit()
 
     # get the longest text audio file to use as speaker reference
