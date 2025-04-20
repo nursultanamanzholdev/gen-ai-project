@@ -37,7 +37,8 @@ def create_xtts_trainer_parser():
                         help="Learning rate")
     parser.add_argument("--save_step", type=int, default=5000,
                         help="Save step")
-    parser.add_argument("--use_ddp", action="store_true", help="Enable Distributed Data Parallel training")
+    parser.add_argument("--use_ddp", type=str, choices=["true", "false"], default="true",
+                        help="Enable Distributed Data Parallel training")
 
     return parser
 
@@ -189,6 +190,8 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
         eval_split_size=config.eval_split_size,
     )
 
+    use_ddp_bool = use_ddp.lower() == "true"
+
     # init the trainer and 🚀
     trainer = Trainer(
         TrainerArgs(
@@ -196,7 +199,7 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
             skip_train_epoch=False,
             start_with_eval=START_WITH_EVAL,
             grad_accum_steps=GRAD_ACUMM_STEPS,
-            use_ddp=use_ddp
+            use_ddp=use_ddp_bool
         ),
         config,
         output_path=os.path.join(output_path, "run", "training"),
