@@ -15,11 +15,18 @@ from transformers import HfArgumentParser
 import argparse
 import torch.distributed as dist
 
-os.environ["MASTER_ADDR"] = "127.0.0.1"
-os.environ["MASTER_PORT"] = "29500"
+# Use a file-based init_method
+os.environ["MASTER_ADDR"] = "127.0.0.1"  # Still set for compatibility
+os.environ["MASTER_PORT"] = "29500"      # Still set for compatibility
+os.environ["RANK"] = os.environ.get("RANK", "0")
+os.environ["WORLD_SIZE"] = os.environ.get("WORLD_SIZE", "2")
+os.environ["INIT_METHOD"] = "file:///kaggle/working/ddp_shared_file"
 
-print("MASTER_ADDR set to:", os.environ.get("MASTER_ADDR"))
-print("MASTER_PORT set to:", os.environ.get("MASTER_PORT"))
+# Ensure the file is writable
+if os.path.exists("/kaggle/working/ddp_shared_file"):
+    os.remove("/kaggle/working/ddp_shared_file")
+
+print("INIT_METHOD set to:", os.environ.get("INIT_METHOD"))
 
 
 def create_xtts_trainer_parser():
