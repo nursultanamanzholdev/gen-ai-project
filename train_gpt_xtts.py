@@ -18,9 +18,9 @@ def create_xtts_trainer_parser():
     parser.add_argument("--output_path", type=str, required=True, help="Path to pretrained + checkpoint model")
     parser.add_argument("--metadatas", nargs='+', type=str, required=True, help="train_csv_path,eval_csv_path,language")
     parser.add_argument("--num_epochs", type=int, default=1, help="Number of epochs")
-    parser.add_argument("--batch_size", type=int, default=1, help="Mini batch size")
-    parser.add_argument("--grad_acumm", type=int, default=1, help="Grad accumulation steps")
-    parser.add_argument("--max_audio_length", type=int, default=255995, help="Max audio length")
+    parser.add_argument("--batch_size", type=int, default=4, help="Mini batch size")  # Adjusted
+    parser.add_argument("--grad_acumm", type=int, default=8, help="Grad accumulation steps")  # Adjusted
+    parser.add_argument("--max_audio_length", type=int, default=255995, help="Max audio length")  # Adjusted
     parser.add_argument("--max_text_length", type=int, default=200, help="Max text length")
     parser.add_argument("--weight_decay", type=float, default=1e-2, help="Weight decay")
     parser.add_argument("--lr", type=float, default=5e-6, help="Learning rate")
@@ -121,7 +121,7 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
     config.logger_uri = LOGGER_URI
     config.audio = audio_config
     config.batch_size = BATCH_SIZE
-    config.num_loader_workers = 2  # Reduced for Kaggle stability
+    config.num_loader_workers = 2  # Reduced for stability
     config.eval_split_max_size = 256
     config.eval_split_size = 0.01  # Ensure non-zero split
     config.print_step = 50
@@ -160,34 +160,43 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
         eval_split_size=config.eval_split_size,
     )
 
-    # Debugging: Check if samples are loaded
+    # Debugging: Check samples
     print(f"Loaded {len(train_samples)} training samples and {len(eval_samples)} evaluation samples")
     if not train_samples or not eval_samples:
         raise ValueError("Training or evaluation samples are empty. Check your dataset paths and CSV files.")
+    print("Sample training data:", train_samples[0])  # Verify sample structure
 
     use_ddp_bool = use_ddp.lower() == "true"
 
-    # Initialize the trainer
-    trainer = Trainer(
-        TrainerArgs(
-            restore_path=None,
-            skip_train_epoch=False,
-            start_with_eval=START_WITH_EVAL,
-            grad_accum_steps=GRAD_ACUMM_STEPS,
-            use_ddp=use_ddp_bool
-        ),
-        config,
-        output_path=os.path.join(output_path, "run", "training"),
-        model=model,
-        train_samples=train_samples,
-        eval_samples=eval_samples,
-    )
+    # Initialize the trainer with error handling
+    try:
+        trainer = Trainer(
+            TrainerArgs(
+                restore_path=None,
+                skip_train_epoch=False,
+                start_with_eval=START_WITH_EVAL,
+                grad_accum_steps=GRAD_ACUMM_STEPS,
+                use_ddp=use_ddp_bool
+            ),
+            config,
+            output_path=os.path.join(output_path, "run", "training"),
+            model=model,
+            train_samples=train_samples,
+            eval_samples=eval_samples,
+        )
+    except Exception as e:
+        print(f"Error during Trainer initialization: {e}")
+        raise
 
     # Restore original device_count
     torch.cuda.device_count = original_device_count
 
-    # Start training
-    trainer.fit()
+    # Start training with error handling
+    try:
+        trainer.fit()
+    except Exception as e:
+        print(f"Error during training: {e}")
+        raise
 
     # Get the longest text audio file for speaker reference
     samples_len = [len(item["text"].split(" ")) for item in train_samples]
