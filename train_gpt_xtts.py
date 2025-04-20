@@ -13,6 +13,14 @@ from typing import Optional
 from transformers import HfArgumentParser
 
 import argparse
+import torch.distributed as dist
+
+os.environ["MASTER_ADDR"] = "127.0.0.1"
+os.environ["MASTER_PORT"] = "29500"
+
+print("MASTER_ADDR set to:", os.environ.get("MASTER_ADDR"))
+print("MASTER_PORT set to:", os.environ.get("MASTER_PORT"))
+
 
 def create_xtts_trainer_parser():
     parser = argparse.ArgumentParser(description="Arguments for XTTS Trainer")
