@@ -18,6 +18,9 @@ import argparse
 import torch.distributed as dist
 
 
+class MyDataParallel(DataParallel):
+    def get_criterion(self):
+        return self.module.get_criterion()
 
 
 def create_xtts_trainer_parser():
@@ -189,10 +192,11 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
     model = GPTTrainer.init_from_config(config)
 
     if torch.cuda.device_count() > 1:
-        print(f"Using {torch.cuda.device_count()} GPUs with DataParallel")
-        model = DataParallel(model)
-    model = model.cuda()  # Ensure model is moved to GPU
+        print(f"Using {torch.cuda.device_count()} GPUs with MyDataParallel")
+        model = MyDataParallel(model)
 
+    model = model.cuda()  # Move model to GPU
+    
     original_device_count = torch.cuda.device_count
     torch.cuda.device_count = lambda: 1  # Temporarily set to 1 to bypass Trainer's check
 
