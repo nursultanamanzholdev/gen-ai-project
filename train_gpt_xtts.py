@@ -25,7 +25,6 @@ def create_xtts_trainer_parser():
     parser.add_argument("--weight_decay", type=float, default=1e-2, help="Weight decay")
     parser.add_argument("--lr", type=float, default=5e-6, help="Learning rate")
     parser.add_argument("--save_step", type=int, default=5000, help="Save step")
-    parser.add_argument("--use_ddp", type=str, choices=["true", "false"], default="false", help="Enable DDP")
     return parser
 
 def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_audio_length, max_text_length, lr, weight_decay, save_step, use_ddp):
@@ -164,8 +163,6 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
         raise ValueError("Training or evaluation samples are empty. Check dataset paths and CSV files.")
     print("Sample training data:", train_samples[0])
 
-    use_ddp_bool = use_ddp.lower() == "true"
-
     # Initialize trainer with debugging
     try:
         trainer = Trainer(
@@ -173,8 +170,7 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
                 restore_path=None,
                 skip_train_epoch=False,
                 start_with_eval=START_WITH_EVAL,
-                grad_accum_steps=GRAD_ACUMM_STEPS,
-                use_ddp=use_ddp_bool
+                grad_accum_steps=GRAD_ACUMM_STEPS
             ),
             config,
             output_path=os.path.join(output_path, "run", "training"),
@@ -223,7 +219,6 @@ if __name__ == "__main__":
         lr=args.lr,
         max_text_length=args.max_text_length,
         max_audio_length=args.max_audio_length,
-        save_step=args.save_step,
-        use_ddp=args.use_ddp
+        save_step=args.save_step
     )
     print(f"Checkpoint saved in dir: {trainer_out_path}")
