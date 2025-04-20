@@ -1,5 +1,7 @@
 import os
 import gc
+import torch
+from torch.nn import DataParallel
 
 from trainer import Trainer, TrainerArgs
 
@@ -15,18 +17,7 @@ from transformers import HfArgumentParser
 import argparse
 import torch.distributed as dist
 
-# Use a file-based init_method
-#os.environ["MASTER_ADDR"] = "127.0.0.1"  # Still set for compatibility
-#os.environ["MASTER_PORT"] = "29500"      # Still set for compatibility
-#os.environ["RANK"] = os.environ.get("RANK", "0")
-#os.environ["WORLD_SIZE"] = os.environ.get("WORLD_SIZE", "2")
-#os.environ["INIT_METHOD"] = "file:///kaggle/working/ddp_shared_file"
 
-# Ensure the file is writable
-#if os.path.exists("/kaggle/working/ddp_shared_file"):
-#    os.remove("/kaggle/working/ddp_shared_file")
-
-#print("INIT_METHOD set to:", os.environ.get("INIT_METHOD"))
 
 
 def create_xtts_trainer_parser():
@@ -197,6 +188,11 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
     # init the model from config
     model = GPTTrainer.init_from_config(config)
 
+    if torch.cuda.device_count() > 1:
+        print(f"Using {torch.cuda.device_count()} GPUs with DataParallel")
+        model = DataParallel(model)
+    model = model.cuda()  # Ensure model is moved to GPU
+    
     # load training samples
     train_samples, eval_samples = load_tts_samples(
         DATASETS_CONFIG_LIST,
@@ -205,7 +201,7 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
         eval_split_size=config.eval_split_size,
     )
 
-    use_ddp_bool = use_ddp.lower() == "true"
+    use_ddp_bool = False
 
     # init the trainer and 🚀
     trainer = Trainer(
