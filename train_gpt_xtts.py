@@ -37,6 +37,7 @@ def create_xtts_trainer_parser():
                         help="Learning rate")
     parser.add_argument("--save_step", type=int, default=5000,
                         help="Save step")
+    parser.add_argument("--use_ddp", action="store_true", help="Enable Distributed Data Parallel training")
 
     return parser
 
@@ -194,7 +195,8 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
             restore_path=None,  # xtts checkpoint is restored via xtts_checkpoint key so no need of restore it using Trainer restore_path parameter
             skip_train_epoch=False,
             start_with_eval=START_WITH_EVAL,
-            grad_accum_steps=GRAD_ACUMM_STEPS
+            grad_accum_steps=GRAD_ACUMM_STEPS,
+            use_ddp=args.use_ddp
         ),
         config,
         output_path=os.path.join(output_path, "run", "training"),
