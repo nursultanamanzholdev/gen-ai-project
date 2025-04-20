@@ -43,7 +43,7 @@ def create_xtts_trainer_parser():
 
 
 
-def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_audio_length, max_text_length, lr, weight_decay, save_step):
+def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_audio_length, max_text_length, lr, weight_decay, save_step, use_ddp):
     #  Logging parameters
     RUN_NAME = "GPT_XTTS_FT"
     PROJECT_NAME = "XTTS_trainer"
@@ -196,7 +196,7 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
             skip_train_epoch=False,
             start_with_eval=START_WITH_EVAL,
             grad_accum_steps=GRAD_ACUMM_STEPS,
-            use_ddp=args.use_ddp
+            use_ddp=use_ddp
         ),
         config,
         output_path=os.path.join(output_path, "run", "training"),
@@ -233,7 +233,8 @@ if __name__ == "__main__":
         lr=args.lr,
         max_text_length=args.max_text_length,
         max_audio_length=args.max_audio_length,
-        save_step=args.save_step
+        save_step=args.save_step,
+        use_ddp=args.use_ddp
     )
 
     print(f"Checkpoint saved in dir: {trainer_out_path}")
