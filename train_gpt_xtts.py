@@ -11,6 +11,7 @@ from TTS.utils.manage import ModelManager
 from dataclasses import dataclass, field
 from typing import Optional
 from transformers import HfArgumentParser
+import torch
 
 import argparse
 
