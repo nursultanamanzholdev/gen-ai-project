@@ -13,7 +13,7 @@ from typing import Optional
 from transformers import HfArgumentParser
 
 import argparse
-#import torch.distributed as dist
+import torch.distributed as dist
 
 # Use a file-based init_method
 #os.environ["MASTER_ADDR"] = "127.0.0.1"  # Still set for compatibility
@@ -206,6 +206,19 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
     )
 
     use_ddp_bool = use_ddp.lower() == "true"
+
+    shared_file = "/kaggle/working/ddp_shared_file"
+    if not os.path.exists(shared_file):
+        open(shared_file, 'a').close()  # Create an empty file if it doesn’t exist
+
+    # Initialize the process group with file-based method
+    if use_ddp.lower() == "true":
+        dist.init_process_group(
+            backend='nccl',  # Use NCCL for GPU training
+            init_method=f'file://{shared_file}',
+            rank=int(os.environ['RANK']),
+            world_size=int(os.environ['WORLD_SIZE'])
+        )
 
     # init the trainer and 🚀
     trainer = Trainer(
