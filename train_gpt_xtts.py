@@ -8,6 +8,7 @@ from TTS.tts.datasets import load_tts_samples
 from TTS.tts.layers.xtts.trainer.gpt_trainer import GPTArgs, GPTTrainer, GPTTrainerConfig, XttsAudioConfig
 from TTS.utils.manage import ModelManager
 from TTS.tts.configs.xtts_config import XttsConfig
+from TTS.tts.models.xtts import XttsAudioConfig
 
 from dataclasses import dataclass, field
 from typing import Optional
@@ -16,7 +17,7 @@ import torch
 
 import argparse
 
-torch.serialization.add_safe_globals([XttsConfig])
+torch.serialization.add_safe_globals([XttsConfig, XttsAudioConfig])
 
 def create_xtts_trainer_parser():
     parser = argparse.ArgumentParser(description="Arguments for XTTS Trainer")
