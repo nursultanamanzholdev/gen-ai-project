@@ -18,14 +18,14 @@ def create_xtts_trainer_parser():
     parser.add_argument("--output_path", type=str, required=True, help="Path to pretrained + checkpoint model")
     parser.add_argument("--metadatas", nargs='+', type=str, required=True, help="train_csv_path,eval_csv_path,language")
     parser.add_argument("--num_epochs", type=int, default=1, help="Number of epochs")
-    parser.add_argument("--batch_size", type=int, default=4, help="Mini batch size")  # Adjusted
-    parser.add_argument("--grad_acumm", type=int, default=8, help="Grad accumulation steps")  # Adjusted
-    parser.add_argument("--max_audio_length", type=int, default=255995, help="Max audio length")  # Adjusted
+    parser.add_argument("--batch_size", type=int, default=2, help="Mini batch size")  # Reduced
+    parser.add_argument("--grad_acumm", type=int, default=16, help="Grad accumulation steps")  # Adjusted
+    parser.add_argument("--max_audio_length", type=int, default=110250, help="Max audio length (~5s)")  # Reduced
     parser.add_argument("--max_text_length", type=int, default=200, help="Max text length")
     parser.add_argument("--weight_decay", type=float, default=1e-2, help="Weight decay")
     parser.add_argument("--lr", type=float, default=5e-6, help="Learning rate")
     parser.add_argument("--save_step", type=int, default=5000, help="Save step")
-    parser.add_argument("--use_ddp", type=str, choices=["true", "false"], default="false", help="Enable Distributed Data Parallel training")
+    parser.add_argument("--use_ddp", type=str, choices=["true", "false"], default="false", help="Enable DDP")
     return parser
 
 def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_audio_length, max_text_length, lr, weight_decay, save_step, use_ddp):
@@ -42,7 +42,7 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
     BATCH_SIZE = batch_size
     GRAD_ACUMM_STEPS = grad_acumm
 
-    # Define dataset configurations
+    # Dataset configurations
     DATASETS_CONFIG_LIST = []
     for metadata in metadatas:
         train_csv, eval_csv, language = metadata.split(",")
@@ -57,7 +57,7 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
         )
         DATASETS_CONFIG_LIST.append(config_dataset)
 
-    # Define paths for XTTS v2.0 files
+    # Paths for XTTS v2.0 files
     CHECKPOINTS_OUT_PATH = os.path.join(OUT_PATH, "XTTS_v2.0_original_model_files/")
     os.makedirs(CHECKPOINTS_OUT_PATH, exist_ok=True)
 
@@ -67,12 +67,11 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
     DVAE_CHECKPOINT = os.path.join(CHECKPOINTS_OUT_PATH, os.path.basename(DVAE_CHECKPOINT_LINK))
     MEL_NORM_FILE = os.path.join(CHECKPOINTS_OUT_PATH, os.path.basename(MEL_NORM_LINK))
 
-    # Download DVAE files if needed
     if not os.path.isfile(DVAE_CHECKPOINT) or not os.path.isfile(MEL_NORM_FILE):
         print(" > Downloading DVAE files!")
         ModelManager._download_model_files([MEL_NORM_LINK, DVAE_CHECKPOINT_LINK], CHECKPOINTS_OUT_PATH, progress_bar=True)
 
-    # Download XTTS v2.0 checkpoint if needed
+    # XTTS v2.0 checkpoint
     TOKENIZER_FILE_LINK = "https://coqui.gateway.scarf.sh/hf-coqui/XTTS-v2/main/vocab.json"
     XTTS_CHECKPOINT_LINK = "https://coqui.gateway.scarf.sh/hf-coqui/XTTS-v2/main/model.pth"
     XTTS_CONFIG_LINK = "https://coqui.gateway.scarf.sh/hf-coqui/XTTS-v2/main/config.json"
@@ -90,7 +89,7 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
         print(" > Downloading XTTS v2.0 config!")
         ModelManager._download_model_files([XTTS_CONFIG_LINK], CHECKPOINTS_OUT_PATH, progress_bar=True)
 
-    # Initialize model arguments and config
+    # Model arguments and config
     model_args = GPTArgs(
         max_conditioning_length=132300,
         min_conditioning_length=11025,
@@ -121,9 +120,9 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
     config.logger_uri = LOGGER_URI
     config.audio = audio_config
     config.batch_size = BATCH_SIZE
-    config.num_loader_workers = 2  # Reduced for stability
+    config.num_loader_workers = 1  # Reduced to minimize issues
     config.eval_split_max_size = 256
-    config.eval_split_size = 0.01  # Ensure non-zero split
+    config.eval_split_size = 0.01
     config.print_step = 50
     config.plot_step = 100
     config.log_model_step = 100
@@ -139,20 +138,20 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
     config.lr_scheduler_params = {"milestones": [50000 * 18, 150000 * 18, 300000 * 18], "gamma": 0.5, "last_epoch": -1}
     config.test_sentences = []
 
-    # Initialize the model
+    # Initialize model
     model = GPTTrainer.init_from_config(config)
 
-    # Wrap model with MyDataParallel if multiple GPUs are available
+    # Multi-GPU handling
     if torch.cuda.device_count() > 1:
         print(f"Using {torch.cuda.device_count()} GPUs with MyDataParallel")
         model = MyDataParallel(model)
-    model = model.cuda()  # Move model to GPU
+    model = model.cuda()
 
-    # Patch torch.cuda.device_count for Trainer initialization
+    # Patch torch.cuda.device_count
     original_device_count = torch.cuda.device_count
-    torch.cuda.device_count = lambda: 1  # Temporarily set to 1 to bypass Trainer's check
+    torch.cuda.device_count = lambda: 1
 
-    # Load training samples
+    # Load samples
     train_samples, eval_samples = load_tts_samples(
         DATASETS_CONFIG_LIST,
         eval_split=True,
@@ -160,15 +159,14 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
         eval_split_size=config.eval_split_size,
     )
 
-    # Debugging: Check samples
     print(f"Loaded {len(train_samples)} training samples and {len(eval_samples)} evaluation samples")
     if not train_samples or not eval_samples:
-        raise ValueError("Training or evaluation samples are empty. Check your dataset paths and CSV files.")
-    print("Sample training data:", train_samples[0])  # Verify sample structure
+        raise ValueError("Training or evaluation samples are empty. Check dataset paths and CSV files.")
+    print("Sample training data:", train_samples[0])
 
     use_ddp_bool = use_ddp.lower() == "true"
 
-    # Initialize the trainer with error handling
+    # Initialize trainer with debugging
     try:
         trainer = Trainer(
             TrainerArgs(
@@ -188,24 +186,24 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
         print(f"Error during Trainer initialization: {e}")
         raise
 
-    # Restore original device_count
+    # Restore device count
     torch.cuda.device_count = original_device_count
 
-    # Start training with error handling
+    # Train with debugging
     try:
         trainer.fit()
     except Exception as e:
         print(f"Error during training: {e}")
         raise
 
-    # Get the longest text audio file for speaker reference
+    # Speaker reference
     samples_len = [len(item["text"].split(" ")) for item in train_samples]
     longest_text_idx = samples_len.index(max(samples_len))
     speaker_ref = train_samples[longest_text_idx]["audio_file"]
 
     trainer_out_path = trainer.output_path
 
-    # Clean up
+    # Cleanup
     del model, trainer, train_samples, eval_samples
     gc.collect()
 
