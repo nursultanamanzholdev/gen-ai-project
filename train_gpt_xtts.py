@@ -214,7 +214,8 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
             skip_train_epoch=False,
             start_with_eval=START_WITH_EVAL,
             grad_accum_steps=GRAD_ACUMM_STEPS,
-            use_ddp=use_ddp_bool
+            use_ddp=use_ddp_bool,
+            dist_url="file:///kaggle/working/ddp_shared_file"
         ),
         config,
         output_path=os.path.join(output_path, "run", "training"),
