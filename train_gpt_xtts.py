@@ -13,20 +13,20 @@ from typing import Optional
 from transformers import HfArgumentParser
 
 import argparse
-import torch.distributed as dist
+#import torch.distributed as dist
 
 # Use a file-based init_method
-os.environ["MASTER_ADDR"] = "127.0.0.1"  # Still set for compatibility
-os.environ["MASTER_PORT"] = "29500"      # Still set for compatibility
-os.environ["RANK"] = os.environ.get("RANK", "0")
-os.environ["WORLD_SIZE"] = os.environ.get("WORLD_SIZE", "2")
-os.environ["INIT_METHOD"] = "file:///kaggle/working/ddp_shared_file"
+#os.environ["MASTER_ADDR"] = "127.0.0.1"  # Still set for compatibility
+#os.environ["MASTER_PORT"] = "29500"      # Still set for compatibility
+#os.environ["RANK"] = os.environ.get("RANK", "0")
+#os.environ["WORLD_SIZE"] = os.environ.get("WORLD_SIZE", "2")
+#os.environ["INIT_METHOD"] = "file:///kaggle/working/ddp_shared_file"
 
 # Ensure the file is writable
-if os.path.exists("/kaggle/working/ddp_shared_file"):
-    os.remove("/kaggle/working/ddp_shared_file")
+#if os.path.exists("/kaggle/working/ddp_shared_file"):
+#    os.remove("/kaggle/working/ddp_shared_file")
 
-print("INIT_METHOD set to:", os.environ.get("INIT_METHOD"))
+#print("INIT_METHOD set to:", os.environ.get("INIT_METHOD"))
 
 
 def create_xtts_trainer_parser():
@@ -214,8 +214,7 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
             skip_train_epoch=False,
             start_with_eval=START_WITH_EVAL,
             grad_accum_steps=GRAD_ACUMM_STEPS,
-            use_ddp=use_ddp_bool,
-            dist_url="file:///kaggle/working/ddp_shared_file"
+            use_ddp=use_ddp_bool
         ),
         config,
         output_path=os.path.join(output_path, "run", "training"),
