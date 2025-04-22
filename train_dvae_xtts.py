@@ -166,7 +166,7 @@ def train(output_path, metadatas, lr=5e-6, num_epochs=5, batch_size=512):
     dvae.train()
     best_loss = 1e6
 
-    # Training loop
+    # Training loop (aligned with original script)
     for i in range(num_epochs):
         if train_sampler is not None:
             train_sampler.set_epoch(i)
@@ -175,7 +175,8 @@ def train(output_path, metadatas, lr=5e-6, num_epochs=5, batch_size=512):
             opt.zero_grad()
             batch = format_batch(batch, device, torch_mel_spectrogram_dvae)
             recon_loss, commitment_loss, out = dvae(batch['mel'])
-            total_loss = recon_loss.mean() + commitment_loss.mean()
+            recon_loss = recon_loss.mean()
+            total_loss = recon_loss + commitment_loss
             total_loss.backward()
             clip_grad_norm_(dvae.parameters(), GRAD_CLIP_NORM)
             opt.step()
@@ -184,37 +185,41 @@ def train(output_path, metadatas, lr=5e-6, num_epochs=5, batch_size=512):
             if world_size > 1:
                 dist.all_reduce(total_loss, op=dist.ReduceOp.SUM)
                 total_loss /= world_size
+                dist.all_reduce(recon_loss, op=dist.ReduceOp.SUM)
+                recon_loss /= world_size
+                dist.all_reduce(commitment_loss, op=dist.ReduceOp.SUM)
+                commitment_loss /= world_size
 
             if local_rank == 0:
-                print(f"epoch: {i} step: {cur_step} loss: {total_loss.item()} recon_loss: {recon_loss.mean().item()} commit_loss: {commitment_loss.mean().item()}")
+                print(f"epoch: {i}", f"step: {cur_step}", f"loss - {total_loss.item()}", f"recon_loss - {recon_loss.item()}", f"commit_loss - {commitment_loss.item()}")
 
             torch.cuda.empty_cache()
 
-        # Evaluation loop
+        # Evaluation loop (aligned with original script)
         with torch.no_grad():
             dvae.eval()
-            eval_total_loss = 0
-            eval_total_samples = 0
-            for batch in eval_data_loader:
+            eval_loss = 0
+            eval_batch_count = 0
+            for cur_step, batch in enumerate(eval_data_loader):
                 batch = format_batch(batch, device, torch_mel_spectrogram_dvae)
                 recon_loss, commitment_loss, out = dvae(batch['mel'])
-                batch_size = batch['mel'].size(0)
-                total_loss = (recon_loss.sum() + commitment_loss.sum()).item()
-                eval_total_loss += total_loss
-                eval_total_samples += batch_size
+                recon_loss = recon_loss.mean()
+                eval_loss += (recon_loss + commitment_loss).item()
+                eval_batch_count += 1
 
             if world_size > 1:
-                eval_loss_tensor = torch.tensor(eval_total_loss, device=device)
-                eval_samples_tensor = torch.tensor(eval_total_samples, device=device)
+                eval_loss_tensor = torch.tensor(eval_loss, device=device)
+                eval_batch_count_tensor = torch.tensor(eval_batch_count, device=device)
                 dist.all_reduce(eval_loss_tensor, op=dist.ReduceOp.SUM)
-                dist.all_reduce(eval_samples_tensor, op=dist.ReduceOp.SUM)
-                eval_total_loss = eval_loss_tensor.item()
-                eval_total_samples = eval_samples_tensor.item()
-
-            eval_loss = eval_total_loss / eval_total_samples if eval_total_samples > 0 else 0
+                dist.all_reduce(eval_batch_count_tensor, op=dist.ReduceOp.SUM)
+                eval_loss = eval_loss_tensor.item()
+                eval_batch_count = eval_batch_count_tensor.item()
+                eval_loss = eval_loss / eval_batch_count if eval_batch_count > 0 else 0
+            else:
+                eval_loss = eval_loss / len(eval_data_loader)
 
             if local_rank == 0:
-                print(f"#######################################\nepoch: {i} EVAL loss: {eval_loss}\n#######################################")
+                print(f"#######################################\nepoch: {i}\tEVAL loss: {eval_loss}\n#######################################")
                 if eval_loss < best_loss:
                     best_loss = eval_loss
                     if isinstance(dvae, DDP):
