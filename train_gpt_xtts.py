@@ -1,5 +1,6 @@
 import os
 import gc
+import torch.distributed as dist
 
 from trainer import Trainer, TrainerArgs
 
@@ -7,17 +8,12 @@ from TTS.config.shared_configs import BaseDatasetConfig
 from TTS.tts.datasets import load_tts_samples
 from TTS.tts.layers.xtts.trainer.gpt_trainer import GPTArgs, GPTTrainer, GPTTrainerConfig, XttsAudioConfig
 from TTS.utils.manage import ModelManager
-from TTS.tts.configs.xtts_config import XttsConfig
-from TTS.tts.models.xtts import XttsAudioConfig
 
 from dataclasses import dataclass, field
 from typing import Optional
 from transformers import HfArgumentParser
-import torch
 
 import argparse
-
-torch.serialization.add_safe_globals([XttsConfig, XttsAudioConfig])
 
 def create_xtts_trainer_parser():
     parser = argparse.ArgumentParser(description="Arguments for XTTS Trainer")
@@ -42,8 +38,6 @@ def create_xtts_trainer_parser():
                         help="Learning rate")
     parser.add_argument("--save_step", type=int, default=5000,
                         help="Save step")
-    parser.add_argument("--local-rank", type=int, default=None,
-                        help="Local rank for distributed training")
 
     return parser
 
@@ -61,10 +55,13 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
     OUT_PATH = output_path
 
     # Training Parameters
-    OPTIMIZER_WD_ONLY_ON_WEIGHTS = True  # for multi-gpu training please make it False
-    START_WITH_EVAL = False  # if True it will star with evaluation
-    BATCH_SIZE = batch_size  # set here the batch size
-    GRAD_ACUMM_STEPS = grad_acumm  # set here the grad accumulation steps
+    if dist.is_available() and dist.is_initialized():
+        OPTIMIZER_WD_ONLY_ON_WEIGHTS = False  # Required for multi-GPU training
+    else:
+        OPTIMIZER_WD_ONLY_ON_WEIGHTS = True   # Default for single-GPU
+    START_WITH_EVAL = False
+    BATCH_SIZE = batch_size
+    GRAD_ACUMM_STEPS = grad_acumm
 
 
     # Define here the dataset that you want to use for the fine-tuning on.
@@ -148,7 +145,7 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
         gpt_use_perceiver_resampler=True,
     )
     # define audio config
-    audio_config = XttsAudioConfig(sample_rate=22050, output_sample_rate=24000)
+    audio_config = XttsAudioConfig(sample_rate=22050, dvae_sample_rate=22050, output_sample_rate=24000)
     # training parameters config
 
     config = GPTTrainerConfig()
@@ -226,10 +223,7 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
 
 if __name__ == "__main__":
     parser = create_xtts_trainer_parser()
-    args = parser.parse_args()
-
-    if args.local_rank is not None:
-        torch.cuda.set_device(args.local_rank)
+    args, unknown = parser.parse_known_args()
 
     trainer_out_path = train_gpt(
         metadatas=args.metadatas,
