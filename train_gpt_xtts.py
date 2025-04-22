@@ -39,13 +39,12 @@ def create_xtts_trainer_parser():
                         help="Learning rate")
     parser.add_argument("--save_step", type=int, default=5000,
                         help="Save step")
-    parser.add_argument("--restore_path", type=str, default=None, help="Path to checkpoint to restore from")
 
     return parser
 
 
 
-def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_audio_length, max_text_length, lr, weight_decay, save_step, restore_path):
+def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_audio_length, max_text_length, lr, weight_decay, save_step):
     #  Logging parameters
     RUN_NAME = "GPT_XTTS_FT"
     PROJECT_NAME = "XTTS_trainer"
@@ -206,7 +205,7 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
     # init the trainer and 🚀
     trainer = Trainer(
         TrainerArgs(
-            restore_path=restore_path,  # xtts checkpoint is restored via xtts_checkpoint key so no need of restore it using Trainer restore_path parameter
+            restore_path=None,  # xtts checkpoint is restored via xtts_checkpoint key so no need of restore it using Trainer restore_path parameter
             skip_train_epoch=False,
             start_with_eval=START_WITH_EVAL,
             grad_accum_steps=GRAD_ACUMM_STEPS
@@ -254,8 +253,7 @@ if __name__ == "__main__":
         lr=args.lr,
         max_text_length=args.max_text_length,
         max_audio_length=args.max_audio_length,
-        save_step=args.save_step,
-        restore_path=args.restore_path
+        save_step=args.save_step
     )
 
     print(f"Checkpoint saved in dir: {trainer_out_path}")
