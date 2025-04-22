@@ -215,6 +215,7 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
         model=model,
         train_samples=train_samples,
         eval_samples=eval_samples,
+        gpu=local_rank
     )
     trainer.fit()
 
