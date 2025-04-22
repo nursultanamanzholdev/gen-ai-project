@@ -1,5 +1,6 @@
 import os
 import gc
+import torch
 import torch.distributed as dist
 
 from trainer import Trainer, TrainerArgs
@@ -63,6 +64,15 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
     BATCH_SIZE = batch_size
     GRAD_ACUMM_STEPS = grad_acumm
 
+    if torch.cuda.device_count() > 1 and 'LOCAL_RANK' in os.environ:
+        dist.init_process_group(backend='nccl', init_method='env://')
+        local_rank = dist.get_rank()
+        torch.cuda.set_device(local_rank)
+        print(f"Process {local_rank} initialized with GPU {local_rank}")
+    else:
+        local_rank = 0
+        torch.cuda.set_device(local_rank) if torch.cuda.is_available() else None
+        print("Running on a single GPU or CPU")
 
     # Define here the dataset that you want to use for the fine-tuning on.
     DATASETS_CONFIG_LIST = []
@@ -224,6 +234,13 @@ def train_gpt(metadatas, num_epochs, batch_size, grad_acumm, output_path, max_au
 if __name__ == "__main__":
     parser = create_xtts_trainer_parser()
     args, unknown = parser.parse_known_args()
+
+    if 'LOCAL_RANK' in os.environ:
+        os.environ['RANK'] = os.environ['LOCAL_RANK']
+        os.environ['WORLD_SIZE'] = os.environ.get('WORLD_SIZE', '1')
+    else:
+        os.environ['RANK'] = '0'
+        os.environ['WORLD_SIZE'] = '1'
 
     trainer_out_path = train_gpt(
         metadatas=args.metadatas,
